@@ -76,18 +76,22 @@
       }
     }
 
-    stage('Build Lambdas') {
-      steps {
-        sh '''
-          for lambda in products orders auth order-worker notification; do
-            cd backend/lambdas/$lambda
-            npm ci --omit=dev
-            zip -r function.zip index.js node_modules/
-            cd ../../..
-          done
-        '''
-      }
-    }
+     stage('Build Lambdas') {
+  steps {
+    sh '''
+      for lambda in products orders auth order-worker notification; do
+        echo "Packaging $lambda..."
+        cd backend/lambdas/$lambda
+        npm ci --omit=dev
+        zip -r /tmp/${lambda}.zip index.js node_modules/ package.json
+        aws s3 cp /tmp/${lambda}.zip s3://shopcloud-lambda-zips/${lambda}.zip
+        echo "Uploaded $lambda to S3"
+        cd ../../..
+      done
+    '''
+    echo "✅ All Lambdas packaged and uploaded to S3"
+  }
+}
 
     stage('Build & Push Docker Image') {
       steps {
@@ -103,17 +107,20 @@
       }
     }
 
-    stage('Deploy Lambdas to AWS') {
-      steps {
-        sh '''
-          for lambda in products orders auth order-worker notification; do
-            aws lambda update-function-code \
-              --function-name shopcloud-${lambda} \
-              --zip-file fileb://backend/lambdas/${lambda}/function.zip
-          done
-        '''
-      }
-    }
+     stage('Deploy Lambdas to AWS') {
+  steps {
+    sh '''
+      for lambda in products orders auth order-worker notification; do
+        aws lambda update-function-code \
+          --function-name shopcloud-${lambda} \
+          --s3-bucket shopcloud-lambda-zips \
+          --s3-key ${lambda}.zip
+        echo "Deployed $lambda"
+      done
+    '''
+    echo "✅ All Lambda functions updated"
+  }
+}
 
     stage('Redeploy ECS Admin') {
       steps {
