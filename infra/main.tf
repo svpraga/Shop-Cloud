@@ -5,6 +5,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
   # Store Terraform state in S3 (team-friendly, Jenkins uses this)
   backend "s3" {
