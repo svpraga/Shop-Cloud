@@ -12,7 +12,7 @@ random = {
   }
   # Store Terraform state in S3 (team-friendly, Jenkins uses this)
   backend "s3" {
-    bucket = "shopcloud-terraform-state"
+    bucket = "shopcloud-terraform-state-0209"
     key    = "prod/terraform.tfstate"
     region = "us-east-1"
   }
