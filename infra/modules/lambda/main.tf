@@ -80,3 +80,7 @@ resource "aws_lambda_event_source_mapping" "sqs_trigger" {
   function_name    = aws_lambda_function.order_worker.arn
   batch_size       = 5
 }
+
+output "api_gateway_id" {
+  value = "placeholder"
+}
