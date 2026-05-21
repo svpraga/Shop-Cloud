@@ -1,10 +1,11 @@
 # infra/modules/lambda/main.tf
 
 variable "db_host"       { default = "" }
-variable "db_password"   { default = ""
-                          sensitive = true }
-variable "sqs_url"       { default = ""
-                           }
+variable "db_password"   { 
+    default = ""
+    sensitive = true 
+     }
+variable "sqs_url"       { default = ""}
 variable "sqs_queue_arn" { default = "" }
 variable "sns_arn"       { default = "" }
 
