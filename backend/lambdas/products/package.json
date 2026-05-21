@@ -1,8 +1,7 @@
 {
-  "name": "orders-lambda",
+  "name": "products-lambda",
   "version": "1.0.0",
   "dependencies": {
-    "@aws-sdk/client-sqs": "^3.0.0",
     "pg": "^8.11.0"
   }
 }
