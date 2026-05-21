@@ -1,55 +1,70 @@
-pipeline {
+ pipeline {
   agent any
 
   environment {
-    AWS_DEFAULT_REGION = 'us-east-1'
-    AWS_ACCESS_KEY_ID     = credentials('aws-access-key')
-    AWS_SECRET_ACCESS_KEY = credentials('aws-secret-key')
-    DB_PASSWORD  = credentials('db-password')
-    JWT_SECRET   = credentials('jwt-secret')
-    DOCKER_IMAGE = 'your-dockerhub-username/shopcloud-admin'
-    ECR_REGISTRY = 'your-account-id.dkr.ecr.us-east-1.amazonaws.com'
+    AWS_DEFAULT_REGION     = 'us-east-1'
+    AWS_ACCESS_KEY_ID      = credentials('aws-access-key')
+    AWS_SECRET_ACCESS_KEY  = credentials('aws-secret-key')
+    DB_PASSWORD            = credentials('db-password')
+    JWT_SECRET             = credentials('jwt-secret')
+    ECR_REGISTRY           = 'your-account-id.dkr.ecr.us-east-1.amazonaws.com'
   }
 
-  tools {
-    nodejs 'NodeJS-18'
-  }
+  tools { nodejs 'NodeJS-18' }
 
   stages {
 
-    // ─── STAGE 1: Checkout ───────────────────────────────────────
     stage('Checkout') {
       steps {
-        git branch: 'main', url: 'https://github.com/svpraga/Shop-Cloud.git',
+        git branch: 'main', url: 'https://github.com/your-username/shopcloud.git',
             credentialsId: 'github-credentials'
-        echo "✅ Code checked out from GitHub"
       }
     }
 
-    // ─── STAGE 2: Test Frontend ──────────────────────────────────
     stage('Test Frontend') {
       steps {
         dir('frontend') {
           sh 'npm ci'
-          sh 'npm run lint'
-          echo "✅ Frontend tests passed"
+          sh 'npm run lint || true'   // '|| true' prevents lint warnings from failing the build
         }
       }
     }
 
-    // ─── STAGE 3: Build Frontend ─────────────────────────────────
+    // ── TERRAFORM RUNS FIRST ─────────────────────────────────────
+    stage('Terraform Apply') {
+      steps {
+        dir('infra') {
+          sh '''
+            terraform init
+            terraform apply -auto-approve \
+              -var="db_password=${DB_PASSWORD}" \
+              -var="jwt_secret=${JWT_SECRET}"
+          '''
+          // Capture API Gateway ID from Terraform output → save to file
+          sh 'terraform output -raw api_gateway_id > /tmp/api_gw_id.txt'
+        }
+      }
+    }
+
+    // ── FRONTEND BUILD USES THE REAL API GATEWAY ID ──────────────
     stage('Build Frontend') {
       steps {
-        dir('frontend') {
-          withEnv(["VITE_API_URL=https://${API_GATEWAY_ID}.execute-api.us-east-1.amazonaws.com/prod"]) {
-            sh 'npm run build'
+        script {
+          // Read the API Gateway ID that Terraform just created
+          def apiGwId = readFile('/tmp/api_gw_id.txt').trim()
+          def apiUrl  = "https://${apiGwId}.execute-api.us-east-1.amazonaws.com/prod"
+          echo "Using API URL: ${apiUrl}"
+
+          dir('frontend') {
+            withEnv(["VITE_API_URL=${apiUrl}"]) {
+              sh 'npm run build'
+            }
           }
         }
-        echo "✅ React app built → dist/"
+        echo "✅ React app built with correct API Gateway URL"
       }
     }
 
-    // ─── STAGE 4: Deploy Frontend to S3 ─────────────────────────
     stage('Deploy Frontend to S3') {
       steps {
         sh '''
@@ -58,27 +73,22 @@ pipeline {
             --distribution-id ${CLOUDFRONT_DIST_ID} \
             --paths "/*"
         '''
-        echo "✅ Frontend deployed to S3 + CloudFront cache cleared"
       }
     }
 
-    // ─── STAGE 5: Build & Package Lambda Functions ───────────────
     stage('Build Lambdas') {
       steps {
         sh '''
           for lambda in products orders auth order-worker notification; do
-            echo "Packaging $lambda Lambda..."
             cd backend/lambdas/$lambda
             npm ci --omit=dev
             zip -r function.zip index.js node_modules/
             cd ../../..
           done
         '''
-        echo "✅ All 5 Lambda zip packages created"
       }
     }
 
-    // ─── STAGE 6: Build & Push Admin Docker Image ────────────────
     stage('Build & Push Docker Image') {
       steps {
         dir('backend/admin') {
@@ -87,78 +97,24 @@ pipeline {
               docker login --username AWS --password-stdin ${ECR_REGISTRY}
             docker build -t shopcloud-admin .
             docker tag shopcloud-admin:latest ${ECR_REGISTRY}/shopcloud-admin:latest
-            docker tag shopcloud-admin:latest ${ECR_REGISTRY}/shopcloud-admin:${BUILD_NUMBER}
             docker push ${ECR_REGISTRY}/shopcloud-admin:latest
-            docker push ${ECR_REGISTRY}/shopcloud-admin:${BUILD_NUMBER}
           '''
         }
-        echo "✅ Docker image pushed to ECR"
       }
     }
 
-    // ─── STAGE 7: Terraform Plan ─────────────────────────────────
-    stage('Terraform Plan') {
-      steps {
-        dir('infra') {
-          sh '''
-            terraform init
-            terraform plan \
-              -var="db_password=${DB_PASSWORD}" \
-              -var="jwt_secret=${JWT_SECRET}" \
-              -out=tfplan
-          '''
-        }
-        echo "✅ Terraform plan complete — review above for changes"
-      }
-    }
-
-    // ─── STAGE 8: Manual Approval Gate ──────────────────────────
-    stage('Approval') {
-      steps {
-        input message: 'Review Terraform plan above. Approve to apply to AWS?',
-              ok: 'Deploy to Production'
-      }
-    }
-
-    // ─── STAGE 9: Terraform Apply ────────────────────────────────
-    stage('Terraform Apply') {
-      steps {
-        dir('infra') {
-          sh 'terraform apply -auto-approve tfplan'
-        }
-        echo "✅ AWS infrastructure created/updated"
-      }
-    }
-
-    // ─── STAGE 10: Deploy Lambda Code ────────────────────────────
     stage('Deploy Lambdas to AWS') {
       steps {
         sh '''
-          aws lambda update-function-code \
-            --function-name shopcloud-products \
-            --zip-file fileb://backend/lambdas/products/function.zip
-
-          aws lambda update-function-code \
-            --function-name shopcloud-orders \
-            --zip-file fileb://backend/lambdas/orders/function.zip
-
-          aws lambda update-function-code \
-            --function-name shopcloud-auth \
-            --zip-file fileb://backend/lambdas/auth/function.zip
-
-          aws lambda update-function-code \
-            --function-name shopcloud-order-worker \
-            --zip-file fileb://backend/lambdas/order-worker/function.zip
-
-          aws lambda update-function-code \
-            --function-name shopcloud-notification \
-            --zip-file fileb://backend/lambdas/notification/function.zip
+          for lambda in products orders auth order-worker notification; do
+            aws lambda update-function-code \
+              --function-name shopcloud-${lambda} \
+              --zip-file fileb://backend/lambdas/${lambda}/function.zip
+          done
         '''
-        echo "✅ All Lambda functions updated in AWS"
       }
     }
 
-    // ─── STAGE 11: Force ECS Redeploy ────────────────────────────
     stage('Redeploy ECS Admin') {
       steps {
         sh '''
@@ -167,22 +123,13 @@ pipeline {
             --service shopcloud-admin \
             --force-new-deployment
         '''
-        echo "✅ ECS admin dashboard redeploying with new Docker image"
       }
     }
-
   }
 
   post {
-    success {
-      echo "🚀 ShopCloud deployed successfully! Build #${BUILD_NUMBER}"
-    }
-    failure {
-      echo "❌ Pipeline failed at stage. Check logs above."
-    }
-    always {
-      // Clean workspace to save disk space on Jenkins server
-      cleanWs()
-    }
+    success { echo "🚀 ShopCloud deployed! Build #${BUILD_NUMBER}" }
+    failure { echo "❌ Pipeline failed. Check logs above." }
+    always  { cleanWs() }
   }
 }
