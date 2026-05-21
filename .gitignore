@@ -9,3 +9,4 @@ __pycache__/
 *.pyc
 .DS_Store
 awscliv2.zip
+AWSCLIV2.pkg
