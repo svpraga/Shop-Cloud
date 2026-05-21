@@ -7,7 +7,7 @@
     AWS_SECRET_ACCESS_KEY  = credentials('aws-secret-key')
     DB_PASSWORD            = credentials('db-password')
     JWT_SECRET             = credentials('jwt-secret')
-    ECR_REGISTRY           = 'your-account-id.dkr.ecr.us-east-1.amazonaws.com'
+    ECR_REGISTRY           = '699532311500.dkr.ecr.us-east-1.amazonaws.com'
   }
 
   tools { nodejs 'NodeJS-18' }
