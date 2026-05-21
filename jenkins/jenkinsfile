@@ -65,17 +65,19 @@
       }
     }
 
-    stage('Deploy Frontend to S3') {
-      steps {
-        sh '''
-          aws s3 sync frontend/dist/ s3://shopcloud-frontend --delete
-          aws cloudfront create-invalidation \
-            --distribution-id ${CLOUDFRONT_DIST_ID} \
-            --paths "/*"
-        '''
+     stage('Deploy Frontend to S3') {
+  steps {
+    script {
+      dir('infra') {
+        sh 'terraform output -raw bucket_name > /tmp/bucket_name.txt || echo "shopcloud-frontend" > /tmp/bucket_name.txt'
       }
+      def bucketName = readFile('/tmp/bucket_name.txt').trim()
+      sh "aws s3 sync frontend/dist/ s3://${bucketName} --delete"
+      echo "✅ Frontend deployed to S3 bucket: ${bucketName}"
+      // CloudFront invalidation skipped until distribution is created
     }
-
+  }
+}
      stage('Build Lambdas') {
   steps {
     sh '''
