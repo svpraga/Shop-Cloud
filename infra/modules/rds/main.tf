@@ -9,7 +9,7 @@ resource "aws_db_instance" "postgres" {
   password            = var.db_password
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
-  publicly_accessible = false
+  publicly_accessible = true
   skip_final_snapshot = true
   tags = { Name = "shopcloud-rds" }
 }
@@ -24,7 +24,7 @@ resource "aws_security_group" "rds" {
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = ["172.31.0.0/16"]  # from jenkins server
+    cidr_blocks = ["0.0.0.0/0"]  # from jenkins server
   }
 }
 output "db_endpoint" { value = aws_db_instance.postgres.address }
