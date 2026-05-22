@@ -1,12 +1,7 @@
-resource "random_id" "suffix" {
-  byte_length = 4
-}
-
 resource "aws_s3_bucket" "frontend" {
-  bucket = "shopcloud-frontend-${random_id.suffix.hex}"
+  bucket = "shopcloud-frontend"
 }
 
-# Step 1: disable block public access FIRST
 resource "aws_s3_bucket_public_access_block" "frontend" {
   bucket = aws_s3_bucket.frontend.id
 
@@ -16,7 +11,6 @@ resource "aws_s3_bucket_public_access_block" "frontend" {
   restrict_public_buckets = false
 }
 
-# Step 2: enable static website hosting
 resource "aws_s3_bucket_website_configuration" "frontend" {
   bucket = aws_s3_bucket.frontend.id
 
@@ -26,7 +20,6 @@ resource "aws_s3_bucket_website_configuration" "frontend" {
   depends_on = [aws_s3_bucket_public_access_block.frontend]
 }
 
-# Step 3: attach public read policy AFTER block public access is disabled
 resource "aws_s3_bucket_policy" "frontend" {
   bucket = aws_s3_bucket.frontend.id
 

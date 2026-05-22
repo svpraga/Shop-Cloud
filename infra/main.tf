@@ -5,10 +5,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.0"
-    }
   }
   backend "s3" {
     bucket = "shopcloud-terraform-state-0209"
@@ -55,4 +51,8 @@ module "cdn" {
 
 output "api_gateway_id" {
   value = module.lambda.api_gateway_id
+}
+
+output "bucket_name" {
+  value = module.cdn.bucket_name
 }
