@@ -24,7 +24,7 @@ resource "aws_security_group" "rds" {
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]  # only within VPC
+    cidr_blocks = ["172.31.0.0/16"]  # from jenkins server
   }
 }
 output "db_endpoint" { value = aws_db_instance.postgres.address }
