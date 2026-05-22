@@ -147,4 +147,6 @@ resource "aws_lambda_event_source_mapping" "sqs_trigger" {
   batch_size       = 5
 }
 
-output "api_gateway_id" { value = "placeholder" }
+ output "api_gateway_id" {
+  value = "https://axmxlqjyse.execute-api.us-east-1.amazonaws.com/prod"
+}
